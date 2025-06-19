@@ -1,0 +1,118 @@
+# Replace the name and path of pem key and Hadoop cluster dns name as per needs
+
+ssh -i <pem_key> hadoop@<EMR_DNS>
+
+e.g. ssh -i ~/aws.pem hadoop@ec2-54-162-101-141.compute-1.amazonaws.com
+
+# Connect to pyspark engine run below command
+
+pyspark
+
+#Reading CSV file in dataframe
+
+circuit_df = spark.read.csv("s3://csv-bucket-pb/circuits/")
+
+# print the type
+
+type(circuit_df)
+
+#print dataframe top 20 values
+
+circuit_df.show()
+
+# Display the schema of the data frame
+
+circuit_df.printSchema()
+
+#define first line as header
+
+circuit_df = spark.read.option("header", True).csv("s3://csv-bucket-pb/circuits/")
+
+circuit_df.describe().show()
+
+#infer Schema
+
+circuit_df = spark.read.csv("s3://csv-bucket-pb/circuits/", header=True, inferSchema=True)
+
+# Rather then inferring schema we can define schema
+
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+
+circuits_schema = StructType(fields=[StructField("circuitId", IntegerType(), False),
+                                     StructField("circuitRef", StringType(), True),
+                                     StructField("name", StringType(), True),
+                                     StructField("location", StringType(), True),
+                                     StructField("country", StringType(), True),
+                                     StructField("lat", DoubleType(), True),
+                                     StructField("lng", DoubleType(), True),
+                                     StructField("alt", IntegerType(), True),
+                                     StructField("url", StringType(), True)])
+
+
+circuit_df = spark.read.schema(circuits_schema).csv("s3://csv-bucket-pb/circuits/", header=True)
+
+circuit_df.printSchema()
+
+# Select Columns
+
+circuits_selected_df = circuit_df.select("circuitId","circuitRef","name","location","country","lat","lng","alt")
+
+from pyspark.sql.functions import col
+
+circuits_selected_df = circuit_df.select(col("circuitId"),col("circuitRef"),col("name"),col("location"),col("country"),col("lat"),col("lng"),col("alt"))
+
+circuits_renamed_df = circuits_selected_df.withColumnRenamed("circuitId","circuit_id") \
+                                          .withColumnRenamed("circuitRef","circuit_ref") \
+                                          .withColumnRenamed("lat","latitude") \
+                                          .withColumnRenamed("lng","longitude") \
+                                          .withColumnRenamed("alt","altitude") 
+
+
+#adding new colunm as ingesntion date
+
+from pyspark.sql.functions import current_timestamp
+
+circuits_final_df =  circuits_renamed_df.withColumn("ingestion_date",current_timestamp())
+
+from pyspark.sql.functions import lit
+
+circuits_final_new_df =  circuits_final_df.withColumn("env",lit("production"))
+
+# Write the cdata frame in parquet format in s3 bucket. Change name of bucket as per requirements
+
+circuits_final_df.write.parquet("s3://csv-bucket-pb/processed/parquet/circuits")
+
+# Overwrite mode
+
+circuits_final_df.write.mode("overwrite").parquet("s3://csv-bucket-pb/parquet/")
+
+# Read the parquet file just created
+
+df_parquet = spark.read.parquet("s3://csv-bucket-pb/parquet/")
+
+# See the content of data frame
+
+df_parquet.show()
+
+
+
+############################################
+Rading json with schema
+############################################
+
+constructors_schema = "constructorId INT, constructorRef STRING, name STRING, nationality STRING, url STRING"
+
+constructors_df = spark.read.schema(constructors_schema).json("s3://csv-bucket-pb/constructors/")
+
+# Drop unwanted column url
+
+constructors_dropped_df = constructors_df.drop('url')
+
+# Rename column
+
+constructors_final_df = constructors_dropped_df.withColumnRenamed("constructorId","constructor_id") \
+                                               .withColumnRenamed("constructorRef","constructor_ref") \
+                                               .withColumn("ingestion_date",current_timestamp())
+
+
+constructors_final_df.write.mode("overwrite").parquet("<s3_bucket>")

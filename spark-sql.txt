@@ -1,0 +1,6 @@
+CREATE EXTERNAL TABLE demouser 
+(id INT, name STRING, email STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+OPTIONS ('header'='true')
+LOCATION 's3://csv-bucket-pb/userdata/'
+TBLPROPERTIES ('skip.header.line.count'='1');
